@@ -1,30 +1,36 @@
 import asyncio
 import json
+import os
+import shutil
+
+import pytest
 
 from fastcontext.agent.tool.glob import GlobTool
 from fastcontext.agent.tool.grep import GrepTool
 
+ripgrep_required = pytest.mark.skipif(
+    shutil.which("rg") is None and not os.getenv("FASTCONTEXT_RG"),
+    reason="ripgrep (rg) is not installed",
+)
 
+
+@ripgrep_required
 def test_grep_tool():
     grep = GrepTool()
     params = {
-        "pattern": "grep.call",
+        "pattern": "GrepTool",
         "path": ".",
         "glob": "*.py",
         "output_mode": "content",
         "head_limit": 100,
         "-C": 3,
     }
-
     output = asyncio.run(grep.call(json.dumps(params)))
-    print(output)
-
-    # /testbed/**: No such file or directory (os error 2)
-    params = {"pattern": "arithmetic", "path": "/testbed/**", "output_mode": "files_with_matches", "head_limit": 200}
-    output = asyncio.run(grep.call(json.dumps(params)))
-    print(output)
+    assert isinstance(output, str)
+    assert "GrepTool" in output
 
 
+@ripgrep_required
 def test_glob_tool():
     glob = GlobTool()
     params = {
@@ -32,7 +38,8 @@ def test_glob_tool():
         "pattern": "**/*.py",
     }
     output = asyncio.run(glob.call(json.dumps(params)))
-    print(output)
+    assert isinstance(output, str)
+    assert ".py" in output
 
 
 if __name__ == "__main__":

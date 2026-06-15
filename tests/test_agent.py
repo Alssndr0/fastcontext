@@ -1,20 +1,27 @@
 import os
 
+import pytest
+
 from fastcontext.agent.agent import Agent
 from fastcontext.agent.llm import LLM
 from fastcontext.agent.tool import ToolSet
 from fastcontext.agent.tool.read import ReadTool
 
+live_server_required = pytest.mark.skipif(
+    not os.getenv("BASE_URL"),
+    reason="requires a live OpenAI-compatible endpoint (set BASE_URL / MODEL / API_KEY)",
+)
 
+
+@live_server_required
 async def test_agent():
     llm = LLM(
         model=os.getenv("MODEL"),
         api_key=os.getenv("API_KEY"),
         base_url=os.getenv("BASE_URL"),
-        debug=True,
     )
 
-    work_dir = "/workspace"
+    work_dir = os.getcwd()
     toolset = ToolSet(tools=[ReadTool()], work_dir=work_dir)
 
     agent = Agent(
@@ -22,36 +29,16 @@ async def test_agent():
         system_prompt="You are a helpful coding assistant.",
         llm=llm,
         toolset=toolset,
-        trajectory_file="test_trajectory.log",
+        trajectory_file=".fastcontext/test_trajectory.jsonl",
         work_dir=work_dir,
     )
 
     result = await agent.run(
-        "Please summarize file content of '/workspace/README.md' to one sentence.",
-        max_turns=5,
+        "Summarize the content of ./README.md in one sentence.",
+        max_turns=20,
         verbose=True,
     )
-    print(result)
-
-
-async def _run_agent(instance: dict, agent_config: dict) -> dict:
-    from fastcontext.agent.agent_factory import make_fastcontext_agent
-
-    max_turns = int(agent_config.get("max_turns", 4))
-    agent = make_fastcontext_agent(
-        trajectory_file=agent_config.get("trajectory_file", ".fastcontext/trajectory.jsonl"),
-        work_dir=agent_config.get("work_dir", "/testbed"),
-    )
-
-    final_answer = await agent.run(prompt=instance["query"], max_turns=max_turns, verbose=True)
-    messages = agent.context.get_messages()
-
-    return {
-        "n_turn": agent.n_turn,
-        "messages": messages,
-        "tools": agent.toolset.schema_list(),
-        "final_answer": final_answer,
-    }
+    assert isinstance(result, str) and result
 
 
 if __name__ == "__main__":

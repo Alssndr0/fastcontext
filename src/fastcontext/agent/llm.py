@@ -5,8 +5,8 @@ from openai.types.chat import ChatCompletionMessageToolCall
 from pydantic import BaseModel, model_serializer
 
 
-class RequestyAPIError(Exception):
-    """Exception for Requesty LLM API errors."""
+class LLMAPIError(Exception):
+    """Exception raised when the LLM API call fails."""
 
 
 type Role = Literal[
@@ -90,13 +90,7 @@ class LLM:
             print("LLM Payload:", payload)
 
         try:
-            if "claude" in self.model:
-                # Use the custom API call for claude models
-                from fastcontext.agent.llm_api import call_completion
-
-                response = call_completion(model=self.model, messages=messages, tools=tools)
-            else:
-                response = await self.client.chat.completions.create(**payload)
+            response = await self.client.chat.completions.create(**payload)
             usage = response.usage.to_dict()
             content = None
             reasoning_content = None
@@ -138,4 +132,4 @@ class LLM:
                 role=role, content=content, reasoning_content=reasoning_content, model=self.model, usage=usage
             )
         except Exception as e:
-            raise RequestyAPIError(f"LLM API call failed: {str(e)}") from e
+            raise LLMAPIError(f"LLM API call failed: {str(e)}") from e

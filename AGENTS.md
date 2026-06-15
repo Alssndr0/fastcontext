@@ -200,7 +200,7 @@ Or let the Makefile emit these: `eval "$(make print-env)"`.
 Run an exploration from inside the repo you want to explore:
 
 ```bash
-fastcontext -q "Find where the agent loop dispatches tool calls" --max-turns 6 --citation --verbose
+fastcontext -q "Find where the agent loop dispatches tool calls" --max-turns 20 --citation --verbose
 # or
 make explore Q="find the request validation logic"
 ```
@@ -227,7 +227,7 @@ curl -s http://localhost:8000/v1/chat/completions \
 # Expect: tool_calls populated, content None.
 
 # 3) Full CLI run + inspect the trajectory to confirm tools returned REAL data
-fastcontext -q "Where is the Read tool implemented?" --max-turns 6 --citation --traj /tmp/fc.jsonl
+fastcontext -q "Where is the Read tool implemented?" --max-turns 20 --citation --traj /tmp/fc.jsonl
 python3 -c "import json; [print(r.get('role'), (r.get('content') or '')[:80]) for r in map(json.loads, open('/tmp/fc.jsonl'))]"
 # Red flag: tool messages containing 'No such file or directory: rg' -> ripgrep not found (see Gotchas).
 ```

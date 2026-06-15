@@ -20,7 +20,7 @@ def main():
         help="agent trajectory file",
         default=f".fastcontext/trajectory_{datetime.now().strftime('%Y-%m-%d-%H%M%S')}.jsonl",
     )
-    parser.add_argument("--max-turns", type=int, help="maximum number of turns", default=4)
+    parser.add_argument("--max-turns", type=int, help="maximum number of turns", default=20)
     parser.add_argument("--verbose", action="store_true", help="whether to run in verbose mode")
     parser.add_argument("--citation", action="store_true", help="Only return the citations in the final answer")
 

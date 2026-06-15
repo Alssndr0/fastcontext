@@ -1,14 +1,13 @@
 from fastcontext.agent.llm import FunctionCall, Message
 from fastcontext.agent.tool import ToolSet
+from fastcontext.agent.tool.read import ReadTool
 
 
 async def test_toolset():
-    from fastcontext.agent.tool.read import ReadTool
-
-    toolset = ToolSet(tools=[ReadTool()])
+    toolset = ToolSet(tools=[ReadTool()], work_dir=".")
     schema_list = toolset.schema_list()
-    print(schema_list)
     assert len(schema_list) == 1
+    assert schema_list[0]["function"]["name"] == "Read"
 
     tool_call_msg = Message(
         role="assistant",
@@ -18,38 +17,23 @@ async def test_toolset():
             FunctionCall(
                 id="call_1_1",
                 name="Read",
-                arguments='{"path": "/workspace/README", "offset": 1, "limit": 100}',
+                arguments='{"path": "./README.md", "offset": 1, "limit": 20}',
             ),
             FunctionCall(
                 id="call_1_2",
                 name="Read",
-                arguments='{"path": "/workspace/README.md", "offset": 4, "limit": 100}',
+                arguments='{"path": "./pyproject.toml", "offset": 1, "limit": 20}',
             ),
         ],
     )
     tools_result_messages = await toolset.call(tool_call_msg)
-    print(tools_result_messages)
-    for i, msg in enumerate(tools_result_messages):
-        print(f"=== msg {i} ===")
-        print(msg.content)
-
-
-async def tools_schema_list():
-    import json
-
-    from fastcontext.agent.tool.glob import GlobTool
-    from fastcontext.agent.tool.grep import GrepTool
-    from fastcontext.agent.tool.read import ReadTool
-
-    toolset = ToolSet(tools=[GrepTool(), GlobTool(), ReadTool()], work_dir="/workspace")
-    schema_list = toolset.schema_list()
-    print(schema_list)
-    with open("tools_schema.json", "w", encoding="utf-8") as f:
-        json.dump(schema_list, f, indent=4)
+    assert len(tools_result_messages) == 2
+    for msg in tools_result_messages:
+        assert msg.role == "tool"
+        assert msg.content
 
 
 if __name__ == "__main__":
     import asyncio
 
     asyncio.run(test_toolset())
-    asyncio.run(tools_schema_list())
