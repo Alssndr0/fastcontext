@@ -52,24 +52,43 @@ focused question per call; make two calls for two unrelated things.
 - **Citations are evidence, not a verdict.** You still verify by reading, then do the actual
   engineering (edit, test, explain) yourself.
 
+## Usage in practice
+
+Query FastContext repeatedly, not once. One broad query rarely covers a feature that spans
+layers; sharpen each follow-up using what the last one revealed:
+
+1. **Start broad** for a beachhead — the files most obviously tied to the request.
+2. **Pivot to the code's own names.** Results reveal the terms the code uses; if you asked about
+   a "rate watch" but see `RateMonitor` / `/api/monitors`, re-ask with those — the explorer
+   won't switch synonyms itself.
+3. **Cover by layer.** Ask for the API endpoint, service logic, data model / DB table, background
+   job, and delivery path explicitly; one query rarely returns all layers.
+4. **Trace call chains yourself.** It won't reliably follow imports or "who calls this" — when a
+   piece is missing, ask directly (e.g. "what calls `check_and_fire_monitors`, and where is it
+   scheduled").
+
+Citations are accurate even when the set is incomplete, so a partial answer is safe to build on
+and "nothing found" is a real signal to re-ask.
+
 ## Drop-in system-prompt snippet
 
 Paste the block below into your agent's system prompt.
 
 <!-- BEGIN: fastcontext integration snippet -->
-You have access to `fastcontext`, a fast read-only codebase-exploration subagent available as
-a shell command. Use it to discover where relevant code lives in an unfamiliar repository.
+You have `fastcontext`, a fast read-only codebase-exploration subagent run as a shell command:
+  fastcontext -q "<detailed description of what to find>" --citation
+It returns a brief summary plus a <final_answer> block of path:line-range citations.
 
-Invoke it as: fastcontext -q "<detailed description of what to find>" --citation
-It returns a short summary plus a <final_answer> block of path:line-range citations.
+Use it to locate a feature/symbol/config you can't place, to map definitions or call sites
+across many files, or when a direct grep found nothing. Skip it when you already know the
+file(s) or a prior turn gave the location.
 
-Use fastcontext when you need to locate a feature/symbol/config you can't already place, when
-you need related definitions or call sites across many files, or when a direct grep found
-nothing. Skip it when you already know the file, a prior turn gave the location, or you only
-need one known file or 2–3 known files.
+After it returns, read the cited ranges directly — don't repeat broad repo-wide searches for
+the same thing. Citations are evidence: verify by reading, then make the change yourself.
 
-After it returns: trust the listing and read the cited ranges directly with your own tools —
-do not repeat broad repo-wide searches for the same thing. Read the most relevant 1–2 ranges
-first. If incomplete, call fastcontext again with a sharper query rather than scanning the repo
-yourself. Treat its citations as evidence; verify by reading, then make the change yourself.
+One call is a starting point, not a full map. It anchors on your wording and won't expand
+synonyms or follow imports on its own, so when a result is incomplete, sharpen the next call
+instead of rephrasing: switch to the names the code uses (it may say `monitor` where you said
+`watch`), ask for a specific missing layer (model, scheduler, delivery), or trace callers
+directly ("what calls X, and where is it scheduled").
 <!-- END: fastcontext integration snippet -->
