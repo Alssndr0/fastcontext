@@ -21,6 +21,9 @@ searches, the main agent delegates a natural-language context query to FastConte
 FastContext explores the repository with read-only tools, issues independent tool calls in
 parallel, and returns compact file-line citations as focused evidence for the main agent.
 
+> 📄 **Paper:** This work is based on *FastContext: Training Efficient Repository Explorer for
+> Coding Agents* — read it at [arxiv.org/html/2606.14066v1](https://arxiv.org/html/2606.14066v1).
+
 ## Overview
 
 Modern coding agents often use the same model to explore a repository and solve the task. This
