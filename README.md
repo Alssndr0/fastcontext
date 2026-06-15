@@ -122,6 +122,34 @@ export API_KEY="your-api-key"
 Benchmark runners may also pass separate FastContext credentials through `FASTCONTEXT_*` variables in
 `benchmark/evaluation/configs/example.env`.
 
+### Local Serving
+
+The released `microsoft/FastContext-1.0-4B-RL` is a standard Qwen3-4B, so it runs on every major
+engine. A `Makefile` wraps serving and exploration — pick the target for your platform:
+
+```bash
+# NVIDIA / CUDA (vLLM) — fp8 weights + fp8 KV cache, 32k context by default
+uv pip install vllm
+make serve
+
+# Apple Silicon (MLX)
+uv pip install mlx-lm mlx-openai-server
+make serve-mlx
+```
+
+With the server running, wire your shell and explore:
+
+```bash
+eval "$(make print-env)"     # exports BASE_URL / MODEL / API_KEY
+make verify                  # confirm the server is up and tool-calling works
+make explore Q="find the request validation logic"
+```
+
+The 32k default context fits an 8 GB card; raise it on bigger GPUs (e.g.
+`make serve MAX_MODEL_LEN=140000` on 16 GB). See [`serving/README.md`](serving/README.md)
+for tool-calling requirements, the served-name convention, VRAM/context sizing (and the vLLM-vs-sglang
+context-cap difference), and verification details.
+
 ## Quick Start
 
 Run FastContext from the repository you want to explore:
@@ -249,8 +277,9 @@ training/
   fastcontext-rl/      Reinforcement-learning scripts and reward utilities
 ```
 
-The `serving/` directory contains example manifests and API checks for serving FastContext-compatible
-models behind an OpenAI-compatible endpoint.
+The `serving/` directory contains launch scripts for serving FastContext models behind an
+OpenAI-compatible endpoint locally (vLLM on CUDA, MLX on Apple Silicon). See
+[`serving/README.md`](serving/README.md).
 
 ## Repository Layout
 

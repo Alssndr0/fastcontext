@@ -73,7 +73,11 @@ class LLM:
             "temperature": self.temperature,
             "top_p": self.top_p,
         }
-        if "qwen" in self.model:
+        # FastContext explorers are Qwen3-based and run with thinking disabled.
+        # Match either a "qwen"-style served name or the FastContext model id so
+        # these settings apply regardless of how the endpoint names the model.
+        model_name = self.model.lower()
+        if "qwen" in model_name or "fastcontext" in model_name:
             payload["extra_body"] = {
                 "top_k": 20,
                 "chat_template_kwargs": {"enable_thinking": False},

@@ -1,4 +1,6 @@
 import json
+import os
+import shutil
 from pathlib import Path
 
 from .tool import Tool
@@ -64,8 +66,9 @@ class GrepTool(Tool):
         "required": ["pattern"],
     }
 
-    # Adjust this path if ripgrep is not in your system PATH
-    _rg_path = "/usr/bin/rg"
+    # Resolve ripgrep from PATH (e.g. /opt/homebrew/bin/rg on macOS,
+    # /usr/bin/rg in many Linux/Docker images). Override with FASTCONTEXT_RG.
+    _rg_path = os.environ.get("FASTCONTEXT_RG") or shutil.which("rg") or "/usr/bin/rg"
 
     async def call(self, parameters: str, **kwargs) -> str:
         params: dict = json.loads(parameters)
