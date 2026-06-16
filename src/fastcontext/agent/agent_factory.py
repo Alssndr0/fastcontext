@@ -17,10 +17,12 @@ def make_fastcontext_agent(
     if system_prompt is None:
         system_prompt = load_system_prompt(work_dir)
 
+    # Default to the local OpenAI-compatible server so the CLI is zero-config
+    # against a `make serve` instance; env vars override for remote endpoints.
     llm = LLM(
-        model=os.getenv("MODEL"),
-        api_key=os.getenv("API_KEY"),
-        base_url=os.getenv("BASE_URL"),
+        model=os.getenv("MODEL", "qwen3-fastcontext-4b-rl"),
+        api_key=os.getenv("API_KEY", "dummy"),
+        base_url=os.getenv("BASE_URL", "http://localhost:8000/v1"),
     )
 
     from fastcontext.agent.tool.glob import GlobTool

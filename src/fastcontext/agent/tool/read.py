@@ -3,7 +3,7 @@ from pathlib import Path
 
 import aiofiles
 
-from .tool import Tool
+from .tool import Tool, resolve_in_workspace
 
 MAX_LINE = 2000
 MAX_LINE_LENGTH = 2000
@@ -17,7 +17,7 @@ class ReadTool(Tool):
         "properties": {
             "path": {
                 "type": "string",
-                "description": "The absolute path of the file to read.",
+                "description": "The path of the file to read -- absolute, or relative to the workspace root.",
             },
             "offset": {
                 "type": "integer",
@@ -40,8 +40,15 @@ class ReadTool(Tool):
         if not file_path:
             return "Read Tool: file path is required."
 
-        if not Path(file_path).exists():
+        cwd = kwargs.get("cwd", Path.cwd().as_posix())
+        resolved = resolve_in_workspace(file_path, cwd)
+        if resolved is None:
+            return f"Permission error: `{file_path}` is not within the working directory `{cwd}`."
+        if resolved.is_dir():
+            return f"Read Tool: `{file_path}` is a directory, not a file."
+        if not resolved.exists():
             return f"Read Tool: file {file_path} does not exist."
+        file_path = str(resolved)
 
         async with aiofiles.open(file_path, mode="r") as f:
             raw_lines = await f.readlines()

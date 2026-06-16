@@ -50,11 +50,22 @@ def load_system_prompt(work_dir: str) -> str:
     )
 
 
-def get_final_answer(text: str) -> str:
+def find_repo_root(path: str) -> str:
+    """Walk up from `path` to the enclosing git repo root, else return `path`."""
+    current = Path(path).resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return str(candidate)
+    return str(current)
+
+
+def get_final_answer(text: str, base_dir: str | None = None) -> str:
     m = re.search(r"<final_answer>(.*?)</final_answer>", text, re.DOTALL)
-    if m is None:
-        return text
-    return m.group(0)
+    answer = text if m is None else m.group(1).strip()
+    if base_dir:
+        # Report paths relative to the repo root so citations are portable.
+        answer = answer.replace(find_repo_root(base_dir).rstrip("/") + "/", "")
+    return answer
 
 
 if __name__ == "__main__":

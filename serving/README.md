@@ -17,15 +17,18 @@ Both expose the same OpenAI API, so the FastContext CLI is identical against eit
 
 ## Quick start (Makefile)
 
-From the repo root:
+The `Makefile` targets are thin aliases for the scripts in this directory. From the repo root:
 
 ```bash
-make serve                       # vLLM, CUDA, fp8, 32k context (override: MAX_MODEL_LEN=140000)
-make serve-mlx                   # MLX, Apple Silicon
+make serve                       # vLLM, CUDA, fp8, 32k context (== ./serving/serve_vllm.sh)
+make serve-mlx                   # MLX, Apple Silicon  (== ./serving/serve_mlx.sh)
 make verify                      # server up? tool-calling parsed?
 make explore Q="find the auth middleware"
-eval "$(make print-env)"         # export BASE_URL/MODEL/API_KEY into your shell
 ```
+
+The CLI defaults to `http://localhost:8000/v1`, so no env wiring is needed against a local
+`make serve` instance. Per-box tuning (e.g. a smaller `MAX_MODEL_LEN`) can live in a gitignored
+`serving/serve.local.env` of `export` lines, which `serve_vllm.sh` sources automatically.
 
 The sections below explain what those targets run and how to size them.
 
@@ -95,12 +98,19 @@ uv pip install mlx-lm mlx-openai-server
 
 ## Use it from the CLI
 
-```bash
-export BASE_URL="http://localhost:8000/v1"
-export MODEL="qwen3-fastcontext-4b-rl"   # match --served-model-name
-export API_KEY="dummy"                    # any non-empty string
+The CLI defaults to `http://localhost:8000/v1` / `qwen3-fastcontext-4b-rl` / `dummy`, so against a
+local server no setup is needed:
 
+```bash
 fastcontext -q "Find where the agent loop dispatches tool calls" --citation --verbose
+```
+
+Only set these when pointing at a **remote** endpoint:
+
+```bash
+export BASE_URL="http://your-host:8000/v1"
+export MODEL="qwen3-fastcontext-4b-rl"   # must match --served-model-name (and contain "qwen")
+export API_KEY="dummy"                    # any non-empty string
 ```
 
 ## Verify end-to-end

@@ -3,7 +3,7 @@ import os
 import shutil
 from pathlib import Path
 
-from .tool import Tool
+from .tool import Tool, resolve_in_workspace
 
 
 class GrepTool(Tool):
@@ -18,7 +18,7 @@ class GrepTool(Tool):
             },
             "path": {
                 "type": "string",
-                "description": "File or directory to search in (rg pattern -- PATH). Defaults to current working directory.",
+                "description": "File or directory to search in (rg pattern -- PATH), absolute or relative to the workspace root. Defaults to the workspace root.",
             },
             "glob": {
                 "type": "string",
@@ -75,7 +75,7 @@ class GrepTool(Tool):
         cwd = kwargs.get("cwd", Path.cwd().as_posix())
         # ripgrep parameters
         pattern = params.get("pattern")
-        path = params.get("path", cwd)
+        raw_path = params.get("path", cwd)
         glob = params.get("glob")
         output_mode = params.get("output_mode")
         before_context = params.get("-B")
@@ -87,8 +87,10 @@ class GrepTool(Tool):
         head_limit = params.get("head_limit")
         multiline = params.get("multiline")
 
-        if not Path(path).resolve().is_relative_to(Path(cwd).resolve()):
-            return f"Permission error: `{path}` is not within the working directory `{cwd}`."
+        resolved = resolve_in_workspace(raw_path, cwd)
+        if resolved is None:
+            return f"Permission error: `{raw_path}` is not within the working directory `{cwd}`."
+        path = str(resolved)
 
         output = run_rg(
             self._rg_path,

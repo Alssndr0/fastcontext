@@ -35,16 +35,14 @@ FastContext separates repository exploration from solving:
 - 🧭 **Delegated exploration**: the main agent asks FastContext for repository context before editing or answering.
 - 🔒 **Read-only tools**: FastContext uses `Read`, `Glob`, and `Grep`; it does not modify files.
 - ⚙️ **Parallel tool calling**: independent reads and searches can be issued in the same exploration turn.
-- 📌 **Compact evidence**: the final response is a short `<final_answer>` block with file paths and line ranges.
+- 📌 **Compact evidence**: the final response is a short list of file paths and line ranges.
 
 The intended contract is simple: FastContext finds the relevant code; the main coding agent
 uses that focused evidence to edit, test, or answer.
 
 ```text
-<final_answer>
 /path/to/repo/src/router.py:42-58
 /path/to/repo/tests/test_router.py:101-119
-</final_answer>
 ```
 
 FastContext is powered by a small, fast model (the released
@@ -83,7 +81,9 @@ dist/fastcontext-0.1.0-py3-none-any.whl
 
 ## Model Configuration
 
-FastContext expects an OpenAI-compatible chat completions endpoint. Configure:
+By default the CLI talks to a local server at `http://localhost:8000/v1` (model
+`qwen3-fastcontext-4b-rl`), so a `make serve` instance needs no configuration. To point at a
+**remote** endpoint, set:
 
 ```bash
 export BASE_URL="https://your-endpoint.example/v1"
@@ -94,28 +94,29 @@ export API_KEY="your-api-key"
 ### Local Serving
 
 The released `microsoft/FastContext-1.0-4B-RL` is a standard Qwen3-4B, so it runs on every major
-engine. A `Makefile` wraps serving and exploration — pick the target for your platform:
+engine. The `Makefile` provides thin command aliases — the serving logic itself lives in
+`serving/serve_vllm.sh` (CUDA) and `serving/serve_mlx.sh` (Apple Silicon). Pick your platform:
 
 ```bash
 # NVIDIA / CUDA (vLLM) — fp8 weights + fp8 KV cache, 32k context by default
 uv pip install vllm
-make serve
+make serve            # == ./serving/serve_vllm.sh
 
 # Apple Silicon (MLX)
 uv pip install mlx-lm mlx-openai-server
 make serve-mlx
 ```
 
-With the server running, wire your shell and explore:
+With the server running, the CLI is zero-config against localhost — just verify and explore:
 
 ```bash
-eval "$(make print-env)"     # exports BASE_URL / MODEL / API_KEY
 make verify                  # confirm the server is up and tool-calling works
 make explore Q="find the request validation logic"
 ```
 
 The 32k default context fits an 8 GB card; raise it on bigger GPUs (e.g.
-`make serve MAX_MODEL_LEN=140000` on 16 GB). See [`serving/README.md`](serving/README.md)
+`make serve MAX_MODEL_LEN=140000` on 16 GB). Per-box tuning can live in a gitignored
+`serving/serve.local.env` (sourced automatically). See [`serving/README.md`](serving/README.md)
 for tool-calling requirements, the served-name convention, VRAM/context sizing (and the vLLM-vs-sglang
 context-cap difference), and verification details. [`AGENTS.md`](AGENTS.md) is a full,
 verified end-to-end serving runbook for both platforms.
@@ -147,7 +148,7 @@ Useful CLI options:
 | `--traj`, `-t` | JSONL trajectory output path. |
 | `--max-turns` | Maximum exploration turns before forcing a final answer (default 20). |
 | `--verbose` | Print intermediate messages and runtime information. |
-| `--citation` | Return only the `<final_answer>` block when present. |
+| `--citation` | Return only the citation list from the final answer when present. |
 
 ## Programmatic Use
 
@@ -176,9 +177,26 @@ asyncio.run(main())
 ## Integrating into your coding agent
 
 FastContext is designed to be driven by a larger coding agent (such as Claude or GPT) as a
-read-only exploration subagent. [`docs/INTEGRATION.md`](docs/INTEGRATION.md) explains when to
-call it, how to write good queries, how to consume its citations, and includes a copy-pasteable
-system-prompt snippet you can drop into your own agent.
+read-only exploration subagent.
+
+Call FastContext when your agent is cold-starting on a repository and needs to discover where a
+feature, symbol, route, behavior, or config lives. Skip it when you already know the target
+file/symbol or a previous turn already gave you the location.
+
+Write specific, self-contained queries that describe behavior or flow, not just a keyword:
+
+- Good: `fastcontext -q "find where incoming webhook payloads are validated and where the HMAC signature is checked" --citation`
+- Weak: `fastcontext -q "webhooks" --citation`
+
+After FastContext returns, read the cited ranges directly instead of repeating broad repo-wide
+searches for the same question. Citations are evidence: verify them by reading, then make edits
+and run tests in your main agent workflow.
+
+Use FastContext iteratively. One call gives a beachhead, not a full map: pivot to names used in
+the codebase, ask for missing layers explicitly (API/service/model/job), and ask direct caller
+traces when needed.
+
+For a copy-pasteable system-prompt integration snippet, see [`AGENTS.md`](AGENTS.md).
 
 ## Repository Layout
 
@@ -198,7 +216,6 @@ src/fastcontext/
       tool.py                    Tool base classes and ToolSet
 
 serving/                         Example serving scripts and API checks (vLLM, MLX)
-docs/                            Integration guide for coding agents
 tests/                           Unit and integration-style tests
 ```
 

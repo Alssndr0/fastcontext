@@ -11,6 +11,40 @@ from fastcontext.agent.llm import Message
 MAX_TOOLRUN_TIMEOUT = 10
 
 
+def resolve_in_workspace(path: str, work_dir: str) -> Path | None:
+    """Resolve a model-supplied path to an absolute path inside the workspace.
+
+    The explorer is sandboxed to ``work_dir``. This normalises the path the model
+    passed and returns it as an absolute ``Path`` when it lands inside the
+    workspace, or ``None`` when it genuinely escapes (so callers raise a
+    permission error). It is lenient about two things the small explorer model
+    routinely gets wrong:
+
+    - Relative paths are resolved against the workspace root, not the process
+      CWD (which ``Path.resolve()`` would otherwise use).
+    - The model often drops the parent prefix and passes a workspace-root-relative
+      absolute path -- e.g. ``/fastcontext/src`` for a workspace at
+      ``/home/user/fastcontext``. We rebase a leading ``/<workspace-name>/...``
+      onto the real workspace before giving up.
+
+    ``..`` traversal that escapes the workspace is still rejected.
+    """
+    work = Path(work_dir).resolve()
+    raw = Path(path)
+    candidate = (raw if raw.is_absolute() else work / raw).resolve()
+    if candidate.is_relative_to(work):
+        return candidate
+
+    # Model dropped the parent prefix: rebase `/<work.name>/...` onto the workspace.
+    parts = candidate.parts[1:]  # strip the leading "/"
+    if parts and parts[0] == work.name:
+        rebased = (work.parent / Path(*parts)).resolve()
+        if rebased.is_relative_to(work):
+            return rebased
+
+    return None
+
+
 class ToolResult(BaseModel):
     tool_call_id: str
     output: str

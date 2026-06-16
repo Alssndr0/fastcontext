@@ -219,3 +219,9 @@ __marimo__/
 
 # Local FastContext run artifacts
 .fastcontext/
+
+# Machine-local serving overrides
+serving/serve.local.env
+
+# Local quantized checkpoints (e.g. AWQ via serving/quantize_awq.py)
+models/

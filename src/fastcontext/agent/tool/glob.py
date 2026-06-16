@@ -2,7 +2,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from .tool import Tool
+from .tool import Tool, resolve_in_workspace
 
 
 def run(directory: str, pattern: str, cwd: str) -> str:
@@ -26,7 +26,7 @@ class GlobTool(Tool):
         "properties": {
             "directory": {
                 "type": "string",
-                "description": "The absolute path of the directory to search in. If not provided, the current working directory will be used.",
+                "description": "The directory to search in, absolute or relative to the workspace root. If not provided, the workspace root will be used.",
             },
             "pattern": {
                 "type": "string",
@@ -39,14 +39,15 @@ class GlobTool(Tool):
     async def call(self, parameters: str, **kwargs) -> str:
         cwd = kwargs.get("cwd", Path.cwd().as_posix())
         params: dict = json.loads(parameters)
-        directory = params.get("directory", cwd)
+        raw_directory = params.get("directory", cwd)
         pattern = params.get("pattern")
 
-        p = Path(directory)
-        if not p.is_dir():
-            return f"The directory `{directory}` does not exist or is not a directory."
-        if not p.resolve().is_relative_to(Path(cwd).resolve()):
-            return f"Permission error: `{directory}` is not within the working directory `{cwd}`."
+        resolved = resolve_in_workspace(raw_directory, cwd)
+        if resolved is None:
+            return f"Permission error: `{raw_directory}` is not within the working directory `{cwd}`."
+        if not resolved.is_dir():
+            return f"The directory `{raw_directory}` does not exist or is not a directory."
+        directory = str(resolved)
 
         output = run(directory, pattern, cwd=cwd)
 

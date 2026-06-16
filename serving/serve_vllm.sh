@@ -21,6 +21,16 @@
 #
 set -euo pipefail
 
+# Use the repo's .venv vllm if present, so this works run directly (not just via make).
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+[[ -d "${REPO_ROOT}/.venv/bin" ]] && PATH="${REPO_ROOT}/.venv/bin:${PATH}"
+
+# Machine-local overrides (gitignored): export MAX_MODEL_LEN, GPU_MEM_UTIL, etc.
+# so per-box tuning applies whether you run this script directly or via `make serve`.
+LOCAL_ENV="$(dirname "$0")/serve.local.env"
+# shellcheck disable=SC1090
+[[ -f "${LOCAL_ENV}" ]] && source "${LOCAL_ENV}"
+
 MODEL_PATH="${MODEL_PATH:-microsoft/FastContext-1.0-4B-RL}"
 
 # IMPORTANT: the served name must contain "qwen" so the FastContext client
@@ -49,10 +59,13 @@ TOOL_PARSER="${TOOL_PARSER:-hermes}"
 # fp8 by default (set to "" to disable):
 #   KV_CACHE_DTYPE=fp8  -> ~2x context per GB (~14.5k tokens/GB). Works on Ampere+.
 #   QUANTIZATION=fp8    -> fp8 weights, ~halve weight memory + faster. Native on
-#                          Ada/Hopper (SM>=8.9); on older Ampere (e.g. A100) set
-#                          QUANTIZATION= to disable if vLLM errors on load.
-KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8}"
-QUANTIZATION="${QUANTIZATION:-fp8}"
+#                          Ada/Hopper/Blackwell (SM>=8.9); on older Ampere (e.g.
+#                          A100) set QUANTIZATION= to disable if vLLM errors on load.
+# Use ${VAR-fp8} (no colon) so an explicitly empty value is honored: `QUANTIZATION=`
+# disables the flag (bf16 weights), while an unset variable still defaults to fp8.
+# With `:-` an empty value would wrongly fall back to fp8.
+KV_CACHE_DTYPE="${KV_CACHE_DTYPE-fp8}"
+QUANTIZATION="${QUANTIZATION-fp8}"
 
 # NOTE: we deliberately do NOT pass --reasoning-parser. Thinking is disabled by
 # the client, and enabling the reasoning parser can break Qwen3 tool-call
@@ -71,6 +84,10 @@ args=(
 
 [[ -n "${KV_CACHE_DTYPE}" ]] && args+=(--kv-cache-dtype "${KV_CACHE_DTYPE}")
 [[ -n "${QUANTIZATION}" ]] && args+=(--quantization "${QUANTIZATION}")
+
+# Append any extra raw vLLM flags (e.g. EXTRA_ARGS="--enforce-eager" to free the
+# CUDA-graph capture buffers for more KV cache on small/WSL GPUs).
+[[ -n "${EXTRA_ARGS:-}" ]] && args+=(${EXTRA_ARGS})
 
 # Preflight: parser names occasionally change between vLLM releases, and the
 # FastContext client depends on working tool-calling. Warn (don't abort) if the

@@ -1,3 +1,4 @@
+import os
 from typing import Any, Literal
 
 from openai import AsyncOpenAI
@@ -52,7 +53,11 @@ class LLM:
         self.model = model
         self.base_url = base_url
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
-        self.max_tokens = kwargs.get("max_tokens", 32_000)
+        # Cap on generated tokens per turn. Default fits a local 16k-context
+        # server (citation answers are short); raise via env for larger servers.
+        self.max_tokens = kwargs.get(
+            "max_tokens", int(os.getenv("FASTCONTEXT_MAX_TOKENS", "2400"))
+        )
         self.temperature = kwargs.get("temperature", 1.0)
         self.top_p = kwargs.get("top_p", 0.95)
         self.debug = kwargs.get("debug", False)

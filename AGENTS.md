@@ -26,9 +26,10 @@ Two non-negotiable requirements the whole setup hinges on:
    thinking **off**.
 
 The repo ships helper scripts so you don't type these by hand:
-- `serving/serve_vllm.sh` — CUDA / vLLM
+- `serving/serve_vllm.sh` — CUDA / vLLM (the single source of serving logic)
 - `serving/serve_mlx.sh` — Apple Silicon / MLX
-- `Makefile` — `make serve`, `make serve-mlx`, `make verify`, `make explore`, `make print-env`
+- `serving/verify.sh` — server health + tool-call sanity check
+- `Makefile` — thin aliases: `make serve`, `make serve-mlx`, `make verify`, `make explore`
 
 ---
 
@@ -170,7 +171,9 @@ fits the KV pool at launch and errors if it can't.** Comfortable, *actually fill
 | 24 GB | ~240K |
 | ≥32 GB | 262144 (full) |
 
-Override per card: `make serve MAX_MODEL_LEN=140000`. 32k is ample for repo exploration anyway —
+Override per card: `make serve MAX_MODEL_LEN=140000`, or make it permanent for this box by putting
+`export MAX_MODEL_LEN=140000` (and any other tuning) in a gitignored `serving/serve.local.env` —
+`serve_vllm.sh` sources it automatically on every launch. 32k is ample for repo exploration anyway —
 context is driven by accumulated tool output over a handful of turns, not repo size.
 
 - **fp8 weights** run natively on Ada/Hopper/Blackwell (SM ≥ 8.9). On older Ampere (e.g. A100)
@@ -189,13 +192,17 @@ context is driven by accumulated tool output over a handful of turns, not repo s
 
 ## 4. Point the CLI at the server (BOTH platforms)
 
+The CLI defaults to a local server — `BASE_URL=http://localhost:8000/v1`,
+`MODEL=qwen3-fastcontext-4b-rl`, `API_KEY=dummy` (`src/fastcontext/agent/agent_factory.py`) — so
+against a local `make serve` instance **no env wiring is needed**.
+
+Only export these when pointing at a **remote** endpoint:
+
 ```bash
-export BASE_URL="http://localhost:8000/v1"
+export BASE_URL="http://your-host:8000/v1"
 export MODEL="qwen3-fastcontext-4b-rl"   # must match --served-model-name (and contain "qwen")
 export API_KEY="dummy"                    # any non-empty string; servers ignore it locally
 ```
-
-Or let the Makefile emit these: `eval "$(make print-env)"`.
 
 Run an exploration from inside the repo you want to explore:
 
@@ -205,7 +212,7 @@ fastcontext -q "Find where the agent loop dispatches tool calls" --max-turns 20 
 make explore Q="find the request validation logic"
 ```
 
-You should get a `<final_answer>` block of real `path:line-range` citations.
+You should get a list of real `path:line-range` citations.
 
 ---
 
@@ -270,6 +277,16 @@ Observed performance: a 6-turn exploration on the 8-bit MLX model (Apple Silicon
 6. **Don't pass `--reasoning-parser` on vLLM** for this setup — thinking is off and it can break
    tool-call parsing (vllm-project/vllm#19513).
 
+7. **"FlashInfer is not available" is a harmless warning — don't chase it on a cu128 box.** vLLM
+   prints this and falls back to PyTorch-native top-p/top-k sampling; for a 4B explorer the
+   difference is negligible. Installing FlashInfer on a Blackwell GPU (SM 12.0) is *not* worth it
+   here: current `flashinfer-python` requires **CUDA ≥ 12.9** for SM 12.x, but the vLLM 0.11.0 stack
+   is pinned to **torch 2.8.0+cu128** (CUDA 12.8). `uv pip install flashinfer-python` resolves the
+   conflict by silently upgrading torch (→ 2.10) and pulling a CUDA-13 toolchain, which breaks the
+   vLLM torch pin — and FlashInfer still won't load (`SM 12.x requires CUDA >= 12.9`). Leave it
+   uninstalled until the whole stack moves to CUDA ≥ 12.9. If you accidentally upgraded torch,
+   restore with `uv pip install "vllm==0.11.0"` (re-pins torch 2.8.0 + triton 3.4.0).
+
 ---
 
 ## 7. One-shot quick reference
@@ -281,11 +298,36 @@ uv tool install . && uv tool install mlx-lm && uv tool install mlx-openai-server
 mlx_lm.convert --hf-path microsoft/FastContext-1.0-4B-RL -q --q-bits 8 \
   --mlx-path "$HOME/models/FastContext-4B-RL-mlx-8bit"
 MLX_PATH="$HOME/models/FastContext-4B-RL-mlx-8bit" ./serving/serve_mlx.sh   # terminal 1
-eval "$(make print-env)"; make verify; make explore Q="find the agent loop" # terminal 2
+make verify; make explore Q="find the agent loop"                           # terminal 2 (CLI is zero-config)
 
 # ---- NVIDIA (vLLM) ----
 sudo apt-get install -y ripgrep
 uv tool install . && uv pip install vllm
-./serving/serve_vllm.sh                  # terminal 1 (8 GB card: default 32768 is right)
-eval "$(make print-env)"; make verify; make explore Q="find the agent loop"  # terminal 2
+make serve                               # terminal 1 (8 GB card: keep MAX_MODEL_LEN ~16-32k)
+make verify; make explore Q="find the agent loop"                           # terminal 2 (CLI is zero-config)
 ```
+
+---
+
+## 8. Drop-in system-prompt snippet
+
+Paste the block below into your agent's system prompt.
+
+<!-- BEGIN: fastcontext integration snippet -->
+You have `fastcontext`, a fast read-only codebase-exploration subagent run as a shell command:
+  fastcontext -q "<detailed description of what to find>" --citation
+It returns a brief summary plus a list of path:line-range citations.
+
+Use it to locate a feature/symbol/config you can't place, to map definitions or call sites
+across many files, or when a direct grep found nothing. Skip it when you already know the
+file(s) or a prior turn gave the location.
+
+After it returns, read the cited ranges directly - don't repeat broad repo-wide searches for
+the same thing. Citations are evidence: verify by reading, then make the change yourself.
+
+One call is a starting point, not a full map. It anchors on your wording and won't expand
+synonyms or follow imports on its own, so when a result is incomplete, sharpen the next call
+instead of rephrasing: switch to the names the code uses (it may say `monitor` where you said
+`watch`), ask for a specific missing layer (model, scheduler, delivery), or trace callers
+directly ("what calls X, and where is it scheduled").
+<!-- END: fastcontext integration snippet -->
