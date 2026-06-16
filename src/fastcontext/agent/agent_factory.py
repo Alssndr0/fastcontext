@@ -8,8 +8,8 @@ from fastcontext.agent.utils import load_system_prompt
 
 
 def make_fastcontext_agent(
-    trajectory_file: str,
     work_dir: str,
+    trajectory_file: str | None = None,
     **kwargs,
 ) -> Agent:
     name = "FastContext"

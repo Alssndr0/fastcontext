@@ -6,11 +6,14 @@ from fastcontext.agent.llm import Message
 
 
 class Context:
-    def __init__(self, trajectory_file: str):
+    def __init__(self, trajectory_file: str | None = None):
         self._history: list[Message] = []
         self.trajectory_file = trajectory_file
 
-        os.makedirs(os.path.dirname(trajectory_file), exist_ok=True)
+        if trajectory_file:
+            dirname = os.path.dirname(trajectory_file)
+            if dirname:
+                os.makedirs(dirname, exist_ok=True)
 
     def get_messages(self) -> list[dict]:
         return [message.to_dict(exclude_none=True) for message in self._history]
@@ -26,6 +29,9 @@ class Context:
             h_message.reasoning_content = None
             h_messages.append(h_message)
         self._history.extend(h_messages)
+
+        if not self.trajectory_file:
+            return
 
         async with aiofiles.open(self.trajectory_file, "a", encoding="utf-8") as f:
             lines = [message.to_dict(exclude_none=True) for message in messages]

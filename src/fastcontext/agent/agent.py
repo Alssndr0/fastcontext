@@ -23,8 +23,8 @@ class Agent:
         system_prompt: str,
         llm: LLM,
         toolset: ToolSet,
-        trajectory_file: str,
         work_dir: str,
+        trajectory_file: str | None = None,
     ):
         self.name = name
         self.system_prompt = system_prompt

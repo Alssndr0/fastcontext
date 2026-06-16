@@ -17,8 +17,10 @@ def main():
         "--traj",
         "-t",
         type=str,
-        help="agent trajectory file",
-        default=f".fastcontext/trajectory_{datetime.now().strftime('%Y-%m-%d-%H%M%S')}.jsonl",
+        nargs="?",
+        const=f".fastcontext/trajectory_{datetime.now().strftime('%Y-%m-%d-%H%M%S')}.jsonl",
+        default=None,
+        help="write the agent trajectory to this file; pass --traj with no value to use a default path under .fastcontext/ (disabled by default)",
     )
     parser.add_argument("--max-turns", type=int, help="maximum number of turns", default=20)
     parser.add_argument("--verbose", action="store_true", help="whether to run in verbose mode")
